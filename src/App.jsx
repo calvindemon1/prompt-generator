@@ -7,15 +7,13 @@ import Settings from "./pages/Settings";
 
 export default function App() {
   return (
-    // <SettingsProvider>
     <Router>
       <Route component={Layout}>
-        <Route path="/" element={<Navigate href="/dashboard" />} />
+        <Route path="/" component={() => <Navigate href="/dashboard" />} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/master" component={Master} />
         <Route path="/settings" component={Settings} />
       </Route>
     </Router>
-    // </SettingsProvider>
   );
 }

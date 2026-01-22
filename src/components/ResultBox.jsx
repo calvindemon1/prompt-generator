@@ -4,7 +4,9 @@ import { createSignal, createEffect } from "solid-js";
 export default function ResultBox(props) {
   const [text, setText] = createSignal(props.text);
   const [copied, setCopied] = createSignal(false);
+  const [clearMenu, setClearMenu] = createSignal(false);
   const [showToast, setShowToast] = createSignal(false);
+  const [showClearToast, setShowClearToast] = createSignal(false);
 
   createEffect(() => {
     setText(props.text);
@@ -19,7 +21,19 @@ export default function ResultBox(props) {
     setTimeout(() => {
       setCopied(false);
       setShowToast(false);
-    }, 2000);
+    }, 1000);
+  };
+
+  const clearAllMenus = async () => {
+    props.onClearAll();
+
+    setClearMenu(true);
+    setShowClearToast(true);
+
+    setTimeout(() => {
+      setClearMenu(false);
+      setShowClearToast(false);
+    }, 1000);
   };
 
   return (
@@ -50,10 +64,17 @@ export default function ResultBox(props) {
 
         {/* CLEAR ALL BUTTON */}
         <button
-          onClick={props.onClearAll} // pakai prop dari Dashboard
-          class="flex gap-2 items-center px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          onClick={clearAllMenus}
+          disabled={clearMenu()}
+          class={`flex gap-2 items-center px-4 py-2 rounded transition
+            ${
+              clearMenu()
+                ? "bg-red-300 text-gray-700 cursor-default"
+                : "bg-red-500 text-white hover:opacity-80"
+            }`}
         >
-          <X size={20} /> Clear All
+          {clearMenu() ? <Check size={20} /> : <X size={20} />}
+          {clearMenu() ? "Cleared" : "Clear All"}
         </button>
 
         {/* GENERATE BUTTON */}
@@ -69,6 +90,11 @@ export default function ResultBox(props) {
       {showToast() && (
         <div class="absolute top-0 right-0 mt-2 mr-2 bg-black text-white px-4 py-2 rounded shadow">
           ✅ Copied to clipboard
+        </div>
+      )}
+      {showClearToast() && (
+        <div class="absolute top-0 right-0 mt-2 mr-2 bg-gray-100 text-red-500 px-4 py-2 rounded shadow">
+          ❌ Cleared All Menus
         </div>
       )}
     </div>

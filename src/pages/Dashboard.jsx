@@ -1,108 +1,100 @@
-import { createSignal, createMemo } from "solid-js";
-import Layout from "../components/Layout";
+import { createSignal, createMemo, createEffect, on } from "solid-js";
+import axios from "axios";
 import OptionGroup from "../components/OptionGroup";
 import ResultBox from "../components/ResultBox";
-import { generatorData } from "../data/generatorData";
+import { masterConfig } from "../config/masterConfig";
+
+const BASE_URL = "https://14grftw2-30001.asse.devtunnels.ms/api";
 
 export default function Dashboard() {
-  const [activeMainTab, setActiveMainTab] = createSignal(0);
+  const [activeMainTab, setActiveMainTab] = createSignal("camera");
+  const [activeSubTabIndex, setActiveSubTabIndex] = createSignal(0);
+  const [generatorData, setGeneratorData] = createSignal([]);
   const [selected, setSelected] = createSignal({});
+  const [loading, setLoading] = createSignal(false);
 
-  const updateCategory = (key, payload) => {
+  // ---------------------------
+  // FETCH DATA SESUAI MAIN + SUB TAB
+  // ---------------------------
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const main = masterConfig[activeMainTab()];
+      const subTab = main.tabs[activeSubTabIndex()];
+      const res = await axios.get(`${BASE_URL}${subTab.endpoints.list}`);
+      const data = res?.data?.data || [];
+
+      // ambil field sesuai config
+      const options = data.map((item) => item[subTab.field]).filter(Boolean);
+      setGeneratorData(options);
+    } catch (err) {
+      console.error("Failed fetch", err);
+      setGeneratorData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------------------------
+  // REFRESH DATA KETIKA TAB BERUBAH
+  // ---------------------------
+  createEffect(on([activeMainTab, activeSubTabIndex], fetchData));
+
+  // ---------------------------
+  // HANDLER SELECTED
+  // ---------------------------
+  const updateCategory = (value) => {
     setSelected((prev) => {
       const next = { ...prev };
-
-      // 🔹 NO SUB TAB
-      if (typeof payload === "string") {
-        const arr = next[key] || [];
-        next[key] = arr.includes(payload)
-          ? arr.filter((v) => v !== payload)
-          : [...arr, payload];
-        return next;
-      }
-
-      // 🔹 WITH SUB TAB
-      const { subLabel, option } = payload;
+      const key = activeMainTab();
+      const subTab = masterConfig[key].tabs[activeSubTabIndex()].label;
 
       next[key] = next[key] || {};
-      const subArr = next[key][subLabel] || [];
+      const arr = next[key][subTab] || [];
 
-      next[key][subLabel] = subArr.includes(option)
-        ? subArr.filter((v) => v !== option)
-        : [...subArr, option];
+      next[key][subTab] = arr.includes(value)
+        ? arr.filter((v) => v !== value)
+        : [...arr, value];
 
-      // cleanup empty
-      if (next[key][subLabel].length === 0) {
-        delete next[key][subLabel];
-      }
+      // cleanup
+      if (next[key][subTab].length === 0) delete next[key][subTab];
+      if (Object.keys(next[key]).length === 0) delete next[key];
 
       return next;
     });
   };
 
-  const activeGroup = createMemo(() => generatorData[activeMainTab()]);
+  const removeSelection = (mainKey, subLabel, option) => {
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (!next[mainKey]?.[subLabel]) return next;
 
+      const filtered = next[mainKey][subLabel].filter((v) => v !== option);
+      if (filtered.length > 0) next[mainKey][subLabel] = filtered;
+      else delete next[mainKey][subLabel];
+
+      if (Object.keys(next[mainKey] || {}).length === 0) delete next[mainKey];
+
+      return next;
+    });
+  };
+
+  // ---------------------------
+  // GENERATED TEXT
+  // ---------------------------
   const stringifySelection = (value) => {
     if (!value) return "";
-
-    // NO SUB TAB
-    if (Array.isArray(value)) {
-      return value.join(", ");
-    }
-
-    // WITH SUB TAB
+    if (Array.isArray(value)) return value.join(", ");
     if (typeof value === "object") {
       return Object.entries(value)
         .map(([sub, opts]) => `${sub}: ${opts.join(", ")}`)
         .join("; ");
     }
-
     return "";
-  };
-
-  const removeSelection = (key, payload) => {
-    setSelected((prev) => {
-      const next = { ...prev };
-
-      // 🔹 NO SUB TAB
-      if (typeof payload === "string") {
-        const arr = next[key] || [];
-        const filtered = arr.filter((v) => v !== payload);
-
-        if (filtered.length > 0) {
-          next[key] = filtered;
-        } else {
-          delete next[key];
-        }
-
-        return next;
-      }
-
-      // 🔹 WITH SUB TAB
-      const { subLabel, option } = payload;
-
-      if (!next[key]?.[subLabel]) return next;
-
-      const filtered = next[key][subLabel].filter((v) => v !== option);
-
-      if (filtered.length > 0) {
-        next[key][subLabel] = filtered;
-      } else {
-        delete next[key][subLabel];
-      }
-
-      // cleanup empty category
-      if (Object.keys(next[key]).length === 0) {
-        delete next[key];
-      }
-
-      return next;
-    });
   };
 
   const generatedText = createMemo(() => {
     const s = selected();
-
     return `Saya ingin membuat sebuah video ${stringifySelection(
       s.camera,
     )} dengan lighting ${stringifySelection(s.lighting)}, warna ${stringifySelection(
@@ -112,108 +104,96 @@ export default function Dashboard() {
     )}.`;
   });
 
+  // ---------------------------
+  // RENDER
+  // ---------------------------
   return (
-    <>
+    <div class="p-6">
       <h2 class="text-2xl font-bold mb-6">Prompt Generator</h2>
 
       {/* MAIN TABS */}
-      <div class="flex gap-6 overflow-x-auto mb-6 border-b">
-        {generatorData.map((group, i) => (
+      <div class="flex gap-6 mb-4 border-b">
+        {Object.entries(masterConfig).map(([key, val]) => (
           <button
-            onClick={() => setActiveMainTab(i)}
-            class={`pb-3 text-sm font-medium whitespace-nowrap transition
-        ${
-          activeMainTab() === i
-            ? "border-b-2 border-black text-black"
-            : "border-b-2 border-transparent text-gray-500 hover:text-black"
-        }
-      `}
+            onClick={() => {
+              setActiveMainTab(key);
+              setActiveSubTabIndex(0);
+            }}
+            class={`pb-2 ${
+              activeMainTab() === key
+                ? "border-b-2 border-black font-semibold"
+                : "text-gray-500"
+            }`}
           >
-            {group.label}
+            {val.label}
           </button>
         ))}
       </div>
 
-      {/* ACTIVE OPTION GROUP ONLY */}
-      <OptionGroup
-        label={activeGroup().label}
-        options={activeGroup().options}
-        value={selected()[activeGroup().key] || []}
-        onChange={(val) => updateCategory(activeGroup().key, val)}
-      />
+      {/* SUB TABS */}
+      <div class="flex gap-4 mb-6">
+        {masterConfig[activeMainTab()].tabs.map((tab, i) => (
+          <button
+            onClick={() => setActiveSubTabIndex(i)}
+            class={`px-3 py-1 rounded ${
+              activeSubTabIndex() === i ? "bg-black text-white" : "bg-gray-100"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* OPTION GROUP */}
+      {loading() ? (
+        <div class="p-4 text-gray-500">Loading...</div>
+      ) : (
+        <OptionGroup
+          label={masterConfig[activeMainTab()].tabs[activeSubTabIndex()].label}
+          options={generatorData()}
+          value={
+            selected()[activeMainTab()]?.[
+              masterConfig[activeMainTab()].tabs[activeSubTabIndex()].label
+            ] || []
+          }
+          onChange={updateCategory}
+        />
+      )}
 
       {/* SELECTED SUMMARY */}
       <div class="mb-6 p-4 border rounded-lg bg-gray-50">
         <h3 class="font-semibold mb-3">Selected Options</h3>
 
-        {generatorData.map((group) => {
-          const value = selected()[group.key];
-          if (!value) return null;
-
-          return (
-            <div class="mb-4">
-              <div class="font-medium mb-1">{group.label}</div>
-
-              {/* NO SUB TAB */}
-              {Array.isArray(value) && (
-                <div class="flex flex-wrap gap-2">
-                  {value.map((v) => (
-                    <span class="px-3 py-1 text-xs rounded-full border bg-white flex items-center gap-1">
-                      {v}
-                      <button
-                        onClick={() => removeSelection(group.key, v)}
-                        class="w-5 h-5 rounded-full flex items-center justify-center bg-red-400 text-white hover:bg-red-600"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* WITH SUB TAB */}
-              {value && !Array.isArray(value) && typeof value === "object" && (
-                <div class="ml-3 space-y-2">
-                  {Object.entries(value).map(([sub, opts]) => (
-                    <div>
-                      <div class="text-xs font-medium text-gray-600">{sub}</div>
-
-                      <div class="flex flex-wrap gap-2 mt-1">
-                        {Array.isArray(opts) &&
-                          opts.map((v) => (
-                            <span class="px-3 py-1 text-xs rounded-full border bg-white flex items-center gap-1">
-                              {v}
-                              <button
-                                onClick={() =>
-                                  removeSelection(group.key, {
-                                    subLabel: sub,
-                                    option: v,
-                                  })
-                                }
-                                class="w-5 h-5 rounded-full flex items-center justify-center bg-red-400 text-white hover:bg-red-600"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+        {Object.entries(selected()).map(([mainKey, subObj]) =>
+          Object.entries(subObj).map(([subLabel, opts]) => (
+            <div class="mb-2">
+              <div class="font-medium text-gray-700">
+                {mainKey} / {subLabel}
+              </div>
+              <div class="flex flex-wrap gap-2 mt-1">
+                {opts.map((opt) => (
+                  <span class="px-3 py-1 text-xs rounded-full border bg-white flex items-center gap-1">
+                    {opt}
+                    <button
+                      onClick={() => removeSelection(mainKey, subLabel, opt)}
+                      class="w-5 h-5 rounded-full flex items-center justify-center bg-red-400 text-white hover:bg-red-600"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
-          );
-        })}
+          )),
+        )}
       </div>
 
+      {/* GENERATED TEXT */}
       <ResultBox
         text={generatedText()}
-        onClearAll={() => setSelected({})} // kirim fungsi clear all
-        onGenerate={() => {
-          console.log("Generate clicked");
-          // nanti bisa isi logika generate
-        }}
+        onClearAll={() => setSelected({})}
+        onGenerate={() => console.log("Generate clicked")}
       />
-    </>
+    </div>
   );
 }
