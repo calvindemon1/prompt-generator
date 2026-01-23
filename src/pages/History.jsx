@@ -1,6 +1,6 @@
 import { createSignal, createMemo, onMount, Show } from "solid-js";
 import axios from "axios";
-import { Eye } from "lucide-solid";
+import { Check, Copy, Eye } from "lucide-solid";
 import { promptConfig } from "../config/promptConfig";
 
 const BASE_URL = "https://14grftw2-30001.asse.devtunnels.ms/api";
@@ -15,6 +15,7 @@ export default function History() {
 
   const [selectedId, setSelectedId] = createSignal(null);
   const [detail, setDetail] = createSignal(null);
+  const [copied, setCopied] = createSignal(false);
 
   /* ================= FETCH ALL ================= */
   const fetchAll = async () => {
@@ -66,6 +67,16 @@ export default function History() {
     } else {
       setSortKey(key);
       setSortDir("asc");
+    }
+  };
+
+  const handleCopy = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Copy failed", err);
     }
   };
 
@@ -170,7 +181,18 @@ export default function History() {
             </div>
 
             <div>
-              <div class="text-xs text-gray-500 mb-1">Prompt</div>
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-xs text-gray-500">Prompt</div>
+
+                <button
+                  onClick={() => handleCopy(detail().prompt)}
+                  class="flex gap-2 items-center text-xs px-3 py-1 rounded border hover:bg-black hover:text-white transition"
+                >
+                  {copied() ? <Check size={20} /> : <Copy size={20} />}
+                  {copied() ? "Copied!" : "Copy"}
+                </button>
+              </div>
+
               <pre class="bg-gray-100 p-3 rounded text-sm whitespace-pre-wrap">
                 {detail().prompt}
               </pre>
