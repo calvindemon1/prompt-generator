@@ -14,37 +14,41 @@ export default function Master() {
     <div>
       <h2 class="text-2xl font-bold mb-6">Master Data</h2>
 
-      {/* CATEGORY */}
-      <div class="flex gap-4 mb-6 border-b">
-        {Object.entries(masterConfig).map(([key, val]) => (
-          <button
-            onClick={() => {
-              setActiveCategory(key);
-              setActiveTabIndex(0);
-            }}
-            class={`pb-2 ${
-              activeCategory() === key
-                ? "border-b-2 border-black font-semibold"
-                : "text-gray-500"
-            }`}
-          >
-            {val.label}
-          </button>
-        ))}
+      {/* TABS */}
+      <div class="relative -mx-6 mb-4 border-b">
+        <div class="flex gap-6 overflow-x-auto no-scrollbar whitespace-nowrap px-6 max-w-full">
+          {Object.entries(masterConfig).map(([key, val]) => (
+            <button
+              onClick={() => {
+                setActiveCategory(key);
+                setActiveTabIndex(0);
+              }}
+              class={`pb-2 shrink-0 ${
+                activeCategory() === key
+                  ? "border-b-2 border-black font-semibold"
+                  : "text-gray-400"
+              }`}
+            >
+              {val.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* SUB TABS */}
-      <div class="flex gap-4 mb-6">
-        {tabs().map((tab, i) => (
-          <button
-            onClick={() => setActiveTabIndex(i)}
-            class={`px-3 py-1 rounded ${
-              activeTabIndex() === i ? "bg-black text-white" : "bg-gray-100"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div class="relative -mx-6 mb-6">
+        <div class="flex gap-3 overflow-x-auto no-scrollbar whitespace-nowrap px-6 max-w-full">
+          {masterConfig[activeCategory()].tabs.map((t, i) => (
+            <button
+              onClick={() => setActiveTabIndex(i)}
+              class={`px-3 py-1 rounded shrink-0 text-sm ${
+                activeTabIndex() === i ? "bg-black text-white" : "bg-gray-100"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 🔥 KEYED RENDER */}

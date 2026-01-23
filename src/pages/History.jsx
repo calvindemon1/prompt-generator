@@ -2,6 +2,7 @@ import { createSignal, createMemo, onMount, Show } from "solid-js";
 import axios from "axios";
 import { Check, Copy, Eye } from "lucide-solid";
 import { promptConfig } from "../config/promptConfig";
+import { copyWithFallback } from "../utils/copyWithFallback";
 
 const BASE_URL = "https://14grftw2-30001.asse.devtunnels.ms/api";
 
@@ -16,6 +17,8 @@ export default function History() {
   const [selectedId, setSelectedId] = createSignal(null);
   const [detail, setDetail] = createSignal(null);
   const [copied, setCopied] = createSignal(false);
+  const PAGE_SIZE = 5;
+  const [page, setPage] = createSignal(1);
 
   /* ================= FETCH ALL ================= */
   const fetchAll = async () => {
@@ -61,6 +64,13 @@ export default function History() {
     return rows;
   });
 
+  const totalPages = createMemo(() => Math.ceil(filtered().length / PAGE_SIZE));
+
+  const pagedData = createMemo(() => {
+    const start = (page() - 1) * PAGE_SIZE;
+    return filtered().slice(start, start + PAGE_SIZE);
+  });
+
   const toggleSort = (key) => {
     if (sortKey() === key) {
       setSortDir(sortDir() === "asc" ? "desc" : "asc");
@@ -71,13 +81,10 @@ export default function History() {
   };
 
   const handleCopy = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    await copyWithFallback(text, () => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Copy failed", err);
-    }
+      setTimeout(() => setCopied(false), 1500);
+    });
   };
 
   return (
@@ -92,24 +99,31 @@ export default function History() {
       />
 
       {/* TABLE */}
-      <div class="border rounded overflow-hidden">
-        <table class="w-full text-sm">
+      <div class="border rounded overflow-x-auto">
+        <table class="min-w-[900px] w-full text-sm">
           <thead class="bg-gray-100">
             <tr>
               <th
-                class="p-3 cursor-pointer"
+                class="p-3 cursor-pointer whitespace-nowrap"
                 onClick={() => toggleSort("creative_prompt_name")}
               >
-                Name
+                Name{" "}
+                {sortKey() === "creative_prompt_name" &&
+                  (sortDir() === "asc" ? "▲" : "▼")}
               </th>
-              <th class="p-3">Prompt</th>
+
+              <th class="p-3 whitespace-nowrap">Prompt</th>
+
               <th
-                class="p-3 cursor-pointer"
+                class="p-3 cursor-pointer whitespace-nowrap"
                 onClick={() => toggleSort("created_at")}
               >
-                Created
+                Created{" "}
+                {sortKey() === "created_at" &&
+                  (sortDir() === "asc" ? "▲" : "▼")}
               </th>
-              <th class="p-3 text-center w-20">Detail</th>
+
+              <th class="p-3 text-center w-20 whitespace-nowrap">Detail</th>
             </tr>
           </thead>
 
@@ -130,7 +144,7 @@ export default function History() {
               </tr>
             )}
 
-            {filtered().map((row) => (
+            {pagedData().map((row) => (
               <tr class="border-t hover:bg-gray-50">
                 <td class="p-3 font-medium">{row.creative_prompt_name}</td>
 
@@ -161,6 +175,31 @@ export default function History() {
         </table>
       </div>
 
+      {/* PAGINATION */}
+      <Show when={totalPages() > 1}>
+        <div class="flex justify-end items-center gap-2 text-sm">
+          <button
+            disabled={page() === 1}
+            onClick={() => setPage(page() - 1)}
+            class="px-3 py-1 border rounded disabled:opacity-40"
+          >
+            Prev
+          </button>
+
+          <span>
+            Page {page()} of {totalPages()}
+          </span>
+
+          <button
+            disabled={page() === totalPages()}
+            onClick={() => setPage(page() + 1)}
+            class="px-3 py-1 border rounded disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      </Show>
+
       {/* DETAIL MODAL */}
       <Show when={detail()}>
         <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -181,19 +220,38 @@ export default function History() {
             </div>
 
             <div>
-              <div class="flex items-center justify-between mb-1">
+              {/* HEADER */}
+              <div class="flex items-center justify-between mb-2">
                 <div class="text-xs text-gray-500">Prompt</div>
 
                 <button
+                  type="button"
                   onClick={() => handleCopy(detail().prompt)}
-                  class="flex gap-2 items-center text-xs px-3 py-1 rounded border hover:bg-black hover:text-white transition"
+                  class="
+                    flex items-center gap-1
+                    text-xs px-3 py-1
+                    rounded border
+                    bg-white
+                    active:bg-black active:text-white
+                    touch-manipulation"
                 >
-                  {copied() ? <Check size={20} /> : <Copy size={20} />}
+                  {copied() ? <Check size={16} /> : <Copy size={16} />}
                   {copied() ? "Copied!" : "Copy"}
                 </button>
               </div>
 
-              <pre class="bg-gray-100 p-3 rounded text-sm whitespace-pre-wrap">
+              {/* PROMPT CONTENT */}
+              <pre
+                class="
+                  bg-gray-100
+                  p-3
+                  rounded
+                  text-sm
+                  whitespace-pre-wrap
+                  max-h-60
+                  overflow-auto
+                  select-text"
+              >
                 {detail().prompt}
               </pre>
             </div>

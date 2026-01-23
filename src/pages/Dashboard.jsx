@@ -186,35 +186,41 @@ export default function Dashboard() {
       </div>
 
       {/* TABS */}
-      <div class="flex gap-6 border-b mb-4">
-        {Object.entries(masterConfig).map(([key, val]) => (
-          <button
-            onClick={() => {
-              setActiveMainTab(key);
-              setActiveSubTabIndex(0);
-            }}
-            class={`pb-2 ${
-              activeMainTab() === key
-                ? "border-b-2 border-black font-semibold"
-                : "text-gray-400"
-            }`}
-          >
-            {val.label}
-          </button>
-        ))}
+      <div class="relative -mx-6 mb-4 border-b">
+        <div class="flex gap-6 overflow-x-auto no-scrollbar whitespace-nowrap px-6 max-w-full">
+          {Object.entries(masterConfig).map(([key, val]) => (
+            <button
+              onClick={() => {
+                setActiveMainTab(key);
+                setActiveSubTabIndex(0);
+              }}
+              class={`pb-2 shrink-0 ${
+                activeMainTab() === key
+                  ? "border-b-2 border-black font-semibold"
+                  : "text-gray-400"
+              }`}
+            >
+              {val.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div class="flex gap-3 mb-6">
-        {masterConfig[activeMainTab()].tabs.map((t, i) => (
-          <button
-            onClick={() => setActiveSubTabIndex(i)}
-            class={`px-3 py-1 rounded ${
-              activeSubTabIndex() === i ? "bg-black text-white" : "bg-gray-100"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div class="relative -mx-6 mb-6">
+        <div class="flex gap-3 overflow-x-auto no-scrollbar whitespace-nowrap px-6 max-w-full">
+          {masterConfig[activeMainTab()].tabs.map((t, i) => (
+            <button
+              onClick={() => setActiveSubTabIndex(i)}
+              class={`px-3 py-1 rounded shrink-0 text-sm ${
+                activeSubTabIndex() === i
+                  ? "bg-black text-white"
+                  : "bg-gray-100"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading() ? (
