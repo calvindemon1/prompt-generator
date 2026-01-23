@@ -4,6 +4,7 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Master from "./pages/Master";
 import Settings from "./pages/Settings";
+import History from "./pages/History";
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
       <Route component={Layout}>
         <Route path="/" component={() => <Navigate href="/dashboard" />} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/history" component={History} />
         <Route path="/master" component={Master} />
         <Route path="/settings" component={Settings} />
       </Route>

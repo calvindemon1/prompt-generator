@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Database,
   Settings as SettingsIcon,
+  History,
 } from "lucide-solid";
 
 export default function Sidebar(props) {
@@ -13,6 +14,11 @@ export default function Sidebar(props) {
       label: "Dashboard",
       path: "/dashboard",
       icon: LayoutDashboard,
+    },
+    {
+      label: "History",
+      path: "/history",
+      icon: History,
     },
     {
       label: "Master Data",

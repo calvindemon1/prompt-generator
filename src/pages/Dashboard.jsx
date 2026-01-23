@@ -3,19 +3,32 @@ import axios from "axios";
 import OptionGroup from "../components/OptionGroup";
 import ResultBox from "../components/ResultBox";
 import { masterConfig } from "../config/masterConfig";
+import { promptConfig } from "../config/promptConfig";
+import { History } from "lucide-solid";
 
 const BASE_URL = "https://14grftw2-30001.asse.devtunnels.ms/api";
 
 export default function Dashboard() {
   const [activeMainTab, setActiveMainTab] = createSignal("camera");
   const [activeSubTabIndex, setActiveSubTabIndex] = createSignal(0);
+
   const [generatorData, setGeneratorData] = createSignal([]);
+  const [optionMap, setOptionMap] = createSignal({});
   const [selected, setSelected] = createSignal({});
   const [loading, setLoading] = createSignal(false);
 
-  // ---------------------------
-  // FETCH DATA SESUAI MAIN + SUB TAB
-  // ---------------------------
+  // 🔥 INPUT FIELD
+  const [promptName, setPromptName] = createSignal("");
+  const [promptNotes, setPromptNotes] = createSignal("");
+  const [promptText, setPromptText] = createSignal("");
+  const [toast, setToast] = createSignal(null);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  /* ================= FETCH OPTIONS ================= */
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -24,95 +37,156 @@ export default function Dashboard() {
       const res = await axios.get(`${BASE_URL}${subTab.endpoints.list}`);
       const data = res?.data?.data || [];
 
-      // ambil field sesuai config
-      const options = data.map((item) => item[subTab.field]).filter(Boolean);
+      const options = [];
+      const map = {};
+
+      data.forEach((item) => {
+        const label = item[subTab.field];
+        if (!label) return;
+        options.push(label);
+        map[label] = item.id;
+      });
+
       setGeneratorData(options);
-    } catch (err) {
-      console.error("Failed fetch", err);
-      setGeneratorData([]);
+
+      setOptionMap((prev) => ({
+        ...prev,
+        [activeMainTab()]: {
+          ...(prev[activeMainTab()] || {}),
+          [subTab.label]: map,
+        },
+      }));
     } finally {
       setLoading(false);
     }
   };
 
-  // ---------------------------
-  // REFRESH DATA KETIKA TAB BERUBAH
-  // ---------------------------
   createEffect(on([activeMainTab, activeSubTabIndex], fetchData));
 
-  // ---------------------------
-  // HANDLER SELECTED
-  // ---------------------------
+  /* ================= SELECT ================= */
   const updateCategory = (value) => {
     setSelected((prev) => {
       const next = { ...prev };
       const key = activeMainTab();
-      const subTab = masterConfig[key].tabs[activeSubTabIndex()].label;
+      const sub = masterConfig[key].tabs[activeSubTabIndex()].label;
 
       next[key] = next[key] || {};
-      const arr = next[key][subTab] || [];
+      const arr = next[key][sub] || [];
 
-      next[key][subTab] = arr.includes(value)
+      next[key][sub] = arr.includes(value)
         ? arr.filter((v) => v !== value)
         : [...arr, value];
 
-      // cleanup
-      if (next[key][subTab].length === 0) delete next[key][subTab];
+      if (next[key][sub].length === 0) delete next[key][sub];
       if (Object.keys(next[key]).length === 0) delete next[key];
-
       return next;
     });
   };
 
-  const removeSelection = (mainKey, subLabel, option) => {
-    setSelected((prev) => {
-      const next = { ...prev };
-      if (!next[mainKey]?.[subLabel]) return next;
+  /* ================= BUILD ID PAYLOAD ================= */
+  const buildIdPayload = () => {
+    const payload = {};
+    const map = optionMap();
+    const sel = selected();
 
-      const filtered = next[mainKey][subLabel].filter((v) => v !== option);
-      if (filtered.length > 0) next[mainKey][subLabel] = filtered;
-      else delete next[mainKey][subLabel];
-
-      if (Object.keys(next[mainKey] || {}).length === 0) delete next[mainKey];
-
-      return next;
+    Object.entries(masterConfig).forEach(([mainKey, main]) => {
+      main.tabs.forEach((tab) => {
+        payload[tab.idKey] =
+          sel?.[mainKey]?.[tab.label]
+            ?.map((v) => map?.[mainKey]?.[tab.label]?.[v])
+            .filter(Boolean) || [];
+      });
     });
+
+    return payload;
   };
 
-  // ---------------------------
-  // GENERATED TEXT
-  // ---------------------------
-  const stringifySelection = (value) => {
-    if (!value) return "";
-    if (Array.isArray(value)) return value.join(", ");
-    if (typeof value === "object") {
-      return Object.entries(value)
-        .map(([sub, opts]) => `${sub}: ${opts.join(", ")}`)
-        .join("; ");
-    }
-    return "";
-  };
-
+  /* ================= GENERATED TEXT ================= */
   const generatedText = createMemo(() => {
-    const s = selected();
-    return `Saya ingin membuat sebuah video ${stringifySelection(
-      s.camera,
-    )} dengan lighting ${stringifySelection(s.lighting)}, warna ${stringifySelection(
-      s.color,
-    )}, style ${stringifySelection(s.style)}, berlatar ${stringifySelection(
-      s.environment,
-    )}.`;
+    const stringify = (o) =>
+      Object.entries(o || {})
+        .map(([k, v]) => `${k}: ${v.join(", ")}`)
+        .join("; ");
+
+    return `Saya ingin membuat sebuah video ${stringify(
+      selected().camera,
+    )} dengan lighting ${stringify(selected().lighting)}, warna ${stringify(
+      selected().color,
+    )}, style ${stringify(
+      selected().style,
+    )}, berlatar ${stringify(selected().environment)}.`;
   });
 
-  // ---------------------------
-  // RENDER
-  // ---------------------------
+  /* ================= POST ================= */
+  const handleGenerate = async () => {
+    const payload = {
+      creative_prompt_name: promptName(),
+      prompt_notes: promptNotes(),
+      prompt: promptText() || generatedText(),
+      ...buildIdPayload(),
+    };
+
+    try {
+      await axios.post(`${BASE_URL}${promptConfig.endpoints.create}`, payload);
+      showToast("Prompt berhasil disimpan 🎉");
+      setSelected({});
+      setPromptName("");
+      setPromptNotes("");
+      setPromptText("");
+    } catch (err) {
+      console.error(err);
+      showToast("Gagal menyimpan prompt ❌", "error");
+    }
+  };
+
+  /* ================= UI ================= */
   return (
     <div class="p-6">
-      <h2 class="text-2xl font-bold mb-6">Prompt Generator</h2>
+      {toast() && (
+        <div
+          class={`fixed top-4 right-4 px-4 py-2 rounded shadow text-white z-50
+        ${toast().type === "error" ? "bg-red-500" : "bg-green-600"}`}
+        >
+          {toast().message}
+        </div>
+      )}
 
-      {/* MAIN TABS */}
-      <div class="flex gap-6 mb-4 border-b">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">Prompt Generator</h2>
+
+        <a
+          href="/history"
+          class="flex items-center gap-1 px-4 py-2 rounded bg-gray-300 hover:bg-black hover:text-white transition text-sm"
+        >
+          <History size={20} /> View History
+        </a>
+      </div>
+
+      {/* INPUT */}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <input
+          class="border p-2 rounded"
+          placeholder="Creative Prompt Name"
+          value={promptName()}
+          onInput={(e) => setPromptName(e.target.value)}
+        />
+        <input
+          class="border p-2 rounded"
+          placeholder="Prompt Notes"
+          value={promptNotes()}
+          onInput={(e) => setPromptNotes(e.target.value)}
+        />
+        {/* <textarea
+          class="border p-2 rounded md:col-span-2"
+          placeholder="Prompt (optional, auto-generated if empty)"
+          rows={3}
+          value={promptText()}
+          onInput={(e) => setPromptText(e.target.value)}
+        /> */}
+      </div>
+
+      {/* TABS */}
+      <div class="flex gap-6 border-b mb-4">
         {Object.entries(masterConfig).map(([key, val]) => (
           <button
             onClick={() => {
@@ -122,7 +196,7 @@ export default function Dashboard() {
             class={`pb-2 ${
               activeMainTab() === key
                 ? "border-b-2 border-black font-semibold"
-                : "text-gray-500"
+                : "text-gray-400"
             }`}
           >
             {val.label}
@@ -130,23 +204,21 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* SUB TABS */}
-      <div class="flex gap-4 mb-6">
-        {masterConfig[activeMainTab()].tabs.map((tab, i) => (
+      <div class="flex gap-3 mb-6">
+        {masterConfig[activeMainTab()].tabs.map((t, i) => (
           <button
             onClick={() => setActiveSubTabIndex(i)}
             class={`px-3 py-1 rounded ${
               activeSubTabIndex() === i ? "bg-black text-white" : "bg-gray-100"
             }`}
           >
-            {tab.label}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* OPTION GROUP */}
       {loading() ? (
-        <div class="p-4 text-gray-500">Loading...</div>
+        <div>Loading...</div>
       ) : (
         <OptionGroup
           label={masterConfig[activeMainTab()].tabs[activeSubTabIndex()].label}
@@ -160,39 +232,12 @@ export default function Dashboard() {
         />
       )}
 
-      {/* SELECTED SUMMARY */}
-      <div class="mb-6 p-4 border rounded-lg bg-gray-50">
-        <h3 class="font-semibold mb-3">Selected Options</h3>
-
-        {Object.entries(selected()).map(([mainKey, subObj]) =>
-          Object.entries(subObj).map(([subLabel, opts]) => (
-            <div class="mb-2">
-              <div class="font-medium text-gray-700">
-                {mainKey} / {subLabel}
-              </div>
-              <div class="flex flex-wrap gap-2 mt-1">
-                {opts.map((opt) => (
-                  <span class="px-3 py-1 text-xs rounded-full border bg-white flex items-center gap-1">
-                    {opt}
-                    <button
-                      onClick={() => removeSelection(mainKey, subLabel, opt)}
-                      class="w-5 h-5 rounded-full flex items-center justify-center bg-red-400 text-white hover:bg-red-600"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )),
-        )}
-      </div>
-
-      {/* GENERATED TEXT */}
       <ResultBox
-        text={generatedText()}
+        text={promptText() || generatedText()}
         onClearAll={() => setSelected({})}
-        onGenerate={() => console.log("Generate clicked")}
+        onGenerate={handleGenerate}
+        value={promptText()}
+        onInput={(e) => setPromptText(e.target.value)}
       />
     </div>
   );
